@@ -1,54 +1,42 @@
 # LibLoRaWAN
 
-LoRaWAN MAC for end devices. Radio PHY lives in a chip driver (for RFM95: [OwlSurf/rfm95](https://github.com/OwlSurf/rfm95)).
+LoRaWAN MAC for end devices. Radio PHY is provided by the host project via modem function pointers — this library has no built-in chip driver (RFM95, SX126x, etc.).
 
 ## Layout
 
 | Path | Role |
 | --- | --- |
-| `Inc/LoRa.h`, `Src/LoRa.c` | Canonical LoRaWAN MAC (do not replace with rfm95 `lorawan.c`) |
+| `Inc/LoRa.h`, `Src/LoRa.c` | LoRaWAN MAC |
 | `lib/ideetron/` | Ideetron AES-128 + LoRaWAN encrypt/MIC (`Encrypt_V31.h` is included by `LoRa.c`) |
-| `Inc/lora_rfm95.h`, `Src/lora_rfm95.c` | Optional RFM95 modem backend |
 
 ## Build
-
-MAC only:
 
 ```sh
 cmake -S . -B build
 cmake --build build
 ```
 
-With RFM95 backend (`LoRaWAN_rfm95`):
+## Modem integration
 
-```sh
-cmake -S . -B build -DRFM95_PATH=/path/to/rfm95
-cmake --build build
+Modem callbacks default to stubs that return `false`. Bind your chip driver after (or before) `lora_init()`:
+
+```c
+lora_init(/* platform callbacks… */);
+lora_modem_init(my_set_freq,
+                my_set_power,
+                my_send,
+                my_receive,
+                my_send_fsk,
+                my_receive_fsk);
 ```
 
-`RFM95_PATH` must contain `rfm95.h` (or `Inc/rfm95.h`).
+Pass `NULL` for any slot to leave the stub in place. Typedefs (`lora_modem_set_freq_fn`, …) match the signatures expected by the MAC.
 
-## RFM95 attach
+Expected PHY behaviour for LoRaWAN (implement in your driver):
 
-1. Initialise the chip (`rfm95_init`).
-2. Call `lora_rfm95_attach(&rfm95_handle)` so the handle is stored.
-3. Call `lora_init(..., lora_rfm95_set_freq, lora_rfm95_set_power, lora_rfm95_send, lora_rfm95_receive, lora_rfm95_send_fsk, lora_rfm95_receive_fsk)`  
-   or call `lora_init` with any modem pointers and then `lora_rfm95_attach` again to install the callbacks.
-
-PHY used by the backend:
-
-- LoRaWAN sync word `0x34`
+- Sync word `0x34`
 - TX IQ normal
 - RX IQ inverted
-
-Chip functions expected from OwlSurf/rfm95:
-
-- `rfm95_set_frequency`
-- `rfm95_set_power`
-- `rfm95_set_sync_word`
-- `rfm95_set_iq_inverted`
-- `rfm95_send` / `rfm95_receive`
-- `rfm95_send_fsk` / `rfm95_receive_fsk`
 
 ## License
 

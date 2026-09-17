@@ -232,6 +232,39 @@ struct lora_config_s {
 
 extern struct lora_config_s default_config;
 
+/**
+ * Modem (radio PHY) callbacks — implement these in the host project for the
+ * concrete LoRa chip and bind them with lora_modem_init().
+ */
+typedef bool (*lora_modem_set_freq_fn)(uint32_t freq);
+
+typedef bool (*lora_modem_set_power_fn)(int8_t power);
+
+typedef bool (*lora_modem_send_fn)(uint8_t *payload_buf,
+                                   uint8_t sf,
+                                   uint8_t bw,
+                                   uint8_t cr,
+                                   uint32_t payload_len,
+                                   uint32_t frequency,
+                                   uint32_t *tx_ticks);
+
+typedef bool (*lora_modem_receive_fn)(uint32_t rx_target,
+                                      uint32_t rx_window_symbols,
+                                      uint8_t sf,
+                                      uint8_t bw,
+                                      uint8_t cr,
+                                      uint8_t *payload_buf,
+                                      uint32_t *payload_len,
+                                      int8_t *snr);
+
+typedef bool (*lora_modem_send_fsk_fn)(uint8_t *payload_buf,
+                                       uint32_t frequency,
+                                       uint32_t payload_len,
+                                       uint32_t *tx_ticks);
+
+typedef bool (*lora_modem_receive_fsk_fn)(uint8_t *payload_buf,
+                                          uint32_t *payload_len);
+
 struct lora_s {
 
 	struct lora_state_s state;
@@ -269,34 +302,17 @@ struct lora_s {
 	 */
 	void (*precision_sleep_until)(uint32_t ticks_target);
 
-	bool (*modem_set_freq)(uint32_t freq);
+	lora_modem_set_freq_fn modem_set_freq;
 
-	bool (*modem_set_power)(int8_t power);
+	lora_modem_set_power_fn modem_set_power;
 
-	bool (*modem_send)(uint8_t *payload_buf,
-					  uint8_t sf,
-					  uint8_t bw,
-					  uint8_t cr,
-	                  uint32_t payload_len,
-	                  uint32_t frequency,
-	                  uint32_t *tx_ticks);
+	lora_modem_send_fn modem_send;
 
-    bool (*modem_receive)(uint32_t rx_target,
-			              uint32_t rx_window_symbols,
-					      uint8_t sf,
-						  uint8_t bw,
-						  uint8_t cr,
-					      uint8_t *payload_buf,
-						  uint32_t *payload_len,
-	                      int8_t *snr);
+	lora_modem_receive_fn modem_receive;
 
-    bool (*modem_send_fsk) (uint8_t *payload_buf,
-    		                uint32_t frequency,
-    		                uint32_t payload_len,
-    				        uint32_t *tx_ticks);
+	lora_modem_send_fsk_fn modem_send_fsk;
 
-    bool (*modem_receive_fsk)(uint8_t *payload_buf,
-    				          uint32_t *payload_len);
+	lora_modem_receive_fsk_fn modem_receive_fsk;
 
     uint8_t phy_payload_buf[64];
     uint32_t phy_payload_len;
@@ -308,6 +324,45 @@ struct lora_s {
 };
 
 extern struct lora_s lora;
+
+/**
+ * Default modem stubs (return false). Assigned to lora modem pointers until
+ * lora_modem_init() replaces them with a real chip driver.
+ */
+bool lora_modem_stub_set_freq(uint32_t freq);
+bool lora_modem_stub_set_power(int8_t power);
+bool lora_modem_stub_send(uint8_t *payload_buf,
+                          uint8_t sf,
+                          uint8_t bw,
+                          uint8_t cr,
+                          uint32_t payload_len,
+                          uint32_t frequency,
+                          uint32_t *tx_ticks);
+bool lora_modem_stub_receive(uint32_t rx_target,
+                             uint32_t rx_window_symbols,
+                             uint8_t sf,
+                             uint8_t bw,
+                             uint8_t cr,
+                             uint8_t *payload_buf,
+                             uint32_t *payload_len,
+                             int8_t *snr);
+bool lora_modem_stub_send_fsk(uint8_t *payload_buf,
+                              uint32_t frequency,
+                              uint32_t payload_len,
+                              uint32_t *tx_ticks);
+bool lora_modem_stub_receive_fsk(uint8_t *payload_buf,
+                                 uint32_t *payload_len);
+
+/**
+ * Bind modem function pointers. Pass NULL for any argument to keep the stub.
+ */
+void lora_modem_init(lora_modem_set_freq_fn set_freq,
+                     lora_modem_set_power_fn set_power,
+                     lora_modem_send_fn send,
+                     lora_modem_receive_fn receive,
+                     lora_modem_send_fsk_fn send_fsk,
+                     lora_modem_receive_fsk_fn receive_fsk);
+
 void lora_init (uint8_t  (*pp_random_int)(uint8_t max),
 		        uint8_t  (*get_battery_level)(),
 		        uint32_t (*pp_get_precision_tick)(),
@@ -319,33 +374,7 @@ void lora_init (uint8_t  (*pp_random_int)(uint8_t max),
 				void     (*pp_save_rx_counter)(const uint16_t *count),
 				bool     (*pp_reload_rx_counter)(uint16_t *count),
 				void     (*pp_save_adr_ack_counter)(const uint16_t *count),
-				bool     (*pp_reload_adr_ack_counter)(uint16_t *count),
-				bool     (*pp_modem_set_freq)(uint32_t),
-				bool     (*pp_modem_set_power)(int8_t power),
-				bool     (*pp_modem_send)(uint8_t *payload_buf,
-								          uint8_t sf,
-									      uint8_t bw,
-									      uint8_t cr,
-				                          uint32_t payload_len,
-				                          uint32_t frequency,
-				                          uint32_t *tx_ticks),
-
-			    bool     (*pp_modem_receive)(uint32_t rx_target,
-						                     uint32_t rx_window_symbols,
-										     uint8_t sf,
-										     uint8_t bw,
-										     uint8_t cr,
-										     uint8_t *payload_buf,
-										     uint32_t *payload_len,
-				                             int8_t *snr),
-
-				bool     (*pp_modem_send_fsk) (uint8_t *payload_buf,
-					                           uint32_t frequency,
-					                           uint32_t payload_len,
-							                   uint32_t *tx_ticks),
-
-				bool     (*pp_modem_receive_fsk)(uint8_t *payload_buf,
-							                     uint32_t *payload_len));
+				bool     (*pp_reload_adr_ack_counter)(uint16_t *count));
 void lora_set_channel_plan();
 bool lora_send_receive_cycle(const uint8_t *send_data, uint32_t send_data_length);
 

@@ -24,6 +24,85 @@
                 0xd5, 0x4b, 0xb8, 0xe3, \
                 0xe7, 0x7a, 0xa1, 0xff
 
+static void stub(void)
+{
+}
+
+bool lora_modem_stub_set_freq(uint32_t freq)
+{
+	(void)freq;
+	stub();
+	return false;
+}
+
+bool lora_modem_stub_set_power(int8_t power)
+{
+	(void)power;
+	stub();
+	return false;
+}
+
+bool lora_modem_stub_send(uint8_t *payload_buf,
+                          uint8_t sf,
+                          uint8_t bw,
+                          uint8_t cr,
+                          uint32_t payload_len,
+                          uint32_t frequency,
+                          uint32_t *tx_ticks)
+{
+	(void)payload_buf;
+	(void)sf;
+	(void)bw;
+	(void)cr;
+	(void)payload_len;
+	(void)frequency;
+	(void)tx_ticks;
+	stub();
+	return false;
+}
+
+bool lora_modem_stub_receive(uint32_t rx_target,
+                             uint32_t rx_window_symbols,
+                             uint8_t sf,
+                             uint8_t bw,
+                             uint8_t cr,
+                             uint8_t *payload_buf,
+                             uint32_t *payload_len,
+                             int8_t *snr)
+{
+	(void)rx_target;
+	(void)rx_window_symbols;
+	(void)sf;
+	(void)bw;
+	(void)cr;
+	(void)payload_buf;
+	(void)payload_len;
+	(void)snr;
+	stub();
+	return false;
+}
+
+bool lora_modem_stub_send_fsk(uint8_t *payload_buf,
+                              uint32_t frequency,
+                              uint32_t payload_len,
+                              uint32_t *tx_ticks)
+{
+	(void)payload_buf;
+	(void)frequency;
+	(void)payload_len;
+	(void)tx_ticks;
+	stub();
+	return false;
+}
+
+bool lora_modem_stub_receive_fsk(uint8_t *payload_buf, uint32_t *payload_len)
+{
+	(void)payload_buf;
+	(void)payload_len;
+	stub();
+	return false;
+}
+
 struct lora_s lora = {
 		.config = {0},
 		.state = {
@@ -31,7 +110,13 @@ struct lora_s lora = {
 			.tx_frame_count = 0,
 			.rx_frame_count = 0,
 			.uplink_acked = false,
-		}
+		},
+		.modem_set_freq = lora_modem_stub_set_freq,
+		.modem_set_power = lora_modem_stub_set_power,
+		.modem_send = lora_modem_stub_send,
+		.modem_receive = lora_modem_stub_receive,
+		.modem_send_fsk = lora_modem_stub_send_fsk,
+		.modem_receive_fsk = lora_modem_stub_receive_fsk,
 };
 
 struct lora_config_s default_config = {
@@ -227,6 +312,21 @@ static bool process_mac_commands(const uint8_t *frame_payload,
 
 static void config_load_default();
 
+void lora_modem_init(lora_modem_set_freq_fn set_freq,
+                     lora_modem_set_power_fn set_power,
+                     lora_modem_send_fn send,
+                     lora_modem_receive_fn receive,
+                     lora_modem_send_fsk_fn send_fsk,
+                     lora_modem_receive_fsk_fn receive_fsk)
+{
+	lora.modem_set_freq = (set_freq != NULL) ? set_freq : lora_modem_stub_set_freq;
+	lora.modem_set_power = (set_power != NULL) ? set_power : lora_modem_stub_set_power;
+	lora.modem_send = (send != NULL) ? send : lora_modem_stub_send;
+	lora.modem_receive = (receive != NULL) ? receive : lora_modem_stub_receive;
+	lora.modem_send_fsk = (send_fsk != NULL) ? send_fsk : lora_modem_stub_send_fsk;
+	lora.modem_receive_fsk = (receive_fsk != NULL) ? receive_fsk : lora_modem_stub_receive_fsk;
+}
+
 void lora_init (uint8_t  (*pp_random_int)(uint8_t max),
 				uint8_t  (*get_battery_level)(),
 		        uint32_t (*pp_get_precision_tick)(),
@@ -238,46 +338,14 @@ void lora_init (uint8_t  (*pp_random_int)(uint8_t max),
 				void     (*pp_save_rx_counter)(const uint16_t *count),
 				bool     (*pp_reload_rx_counter)(uint16_t *count),
 				void     (*pp_save_adr_ack_counter)(const uint16_t *count),
-				bool     (*pp_reload_adr_ack_counter)(uint16_t *count),
-				bool     (*pp_modem_set_freq)(uint32_t),
-				bool     (*pp_modem_set_power)(int8_t power),
-				bool     (*pp_modem_send)(uint8_t *payload_buf,
-								      uint8_t sf,
-									  uint8_t bw,
-									  uint8_t cr,
-				                      uint32_t payload_len,
-				                      uint32_t frequency,
-				                      uint32_t *tx_ticks),
-
-			    bool     (*pp_modem_receive)(uint32_t rx_target,
-						                 uint32_t rx_window_symbols,
-										 uint8_t sf,
-										 uint8_t bw,
-										 uint8_t cr,
-										 uint8_t *payload_buf,
-										 uint32_t *payload_len,
-				                         int8_t *snr),
-
-				bool     (*pp_modem_send_fsk) (uint8_t *payload_buf,
-					                           uint32_t frequency,
-					                           uint32_t payload_len,
-							                   uint32_t *tx_ticks),
-
-				bool     (*pp_modem_receive_fsk)(uint8_t *payload_buf,
-							                     uint32_t *payload_len))
+				bool     (*pp_reload_adr_ack_counter)(uint16_t *count))
 {
 	lora.random_int            = pp_random_int;
+	lora.get_battery_level     = get_battery_level;
     lora.get_precision_tick    = pp_get_precision_tick;
     lora.save_config           = pp_save_config;
     lora.reload_config         = pp_reload_config;
     lora.precision_sleep_until = pp_sleep_until;
-
-    lora.modem_set_freq        = pp_modem_set_freq;
-    lora.modem_set_power       = pp_modem_set_power;
-    lora.modem_send            = pp_modem_send;
-    lora.modem_receive         = pp_modem_receive;
-    lora.modem_send_fsk        = pp_modem_send_fsk;
-    lora.modem_receive_fsk     = pp_modem_receive_fsk;
 
 	lora.state.save_tx_count   = pp_save_tx_counter;
 	lora.state.reload_tx_count = pp_reload_tx_counter;
